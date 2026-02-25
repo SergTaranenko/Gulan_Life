@@ -243,6 +243,7 @@ class GigaChatAPI:
                     json={
                         "model": "GigaChat-Max",
                         "messages": [{"role": "user", "content": prompt}],
+                        "function_call": "auto"
                     },
                     ssl=ssl_context
                 ) as resp:
