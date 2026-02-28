@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Бот «Делатель орудий» (Мезолит) v5.0
+Бот «Делатель орудий» (Мезолит) v5.1
 - Зимне-весенние промпты (февраль-апрель)
 - Ритуальное изделие каждое 10-е (+18ч)
-- Янтарь с Балтики при 52 орудиях
+- Янтарь с Балтики при 76 орудиях
 - Бунт при >24ч без изделий
 """
 
@@ -269,6 +269,72 @@ class GigaChatAPI:
 
 gigachat = GigaChatAPI()
 
+async def generate_keeper_success_text(streak, is_elder):
+    """Генерирует вариативный текст успеха через GigaChat"""
+    
+    # Сценарии для рандомизации (выбираем один)
+    scenarios = [
+        "спор за место у очага между двумя охотниками",
+        "неравный раздел добычи (лосось vs белка)",
+        "долг инструментом (нож затуплен и не возвращен)",
+        "конфликт поколений (старый не хочет учить молодого)",
+        "спор о маршруте (север vs запад)",
+        "брачная сделка (обмен сестры на кремень)"
+    ]
+    
+    scenario = random.choice(scenarios)
+    
+    if is_elder:
+        # Старший стоянки (после 15 марта) - прагматичный стиль
+        prompt = (f"Ты — Старший стоянки мезолитического племени (9600 до н.э.). "
+                 f"Серия успешных дней: {streak}. "
+                 f"Сегодня ты разрешил ситуацию: {scenario}. "
+                 f"Опиши коротко (2-3 предложения), как ты действовал конкретно: "
+                 f"жесты (передал орехи, указал на место), детали (берестяная чашка, "
+                 f"кремневые сколки на земле), результат. "
+                 f"Стиль: сдержанный, деловой, без шаманства. "
+                 f"Только факты: кто что получил, куда пошел, что сделал.")
+    else:
+        # Хранитель соглашений (до 15 марта) - больше про эмоции/примирение
+        prompt = (f"Ты — Хранитель соглашений в мезолитическом племени (9600 до н.э.). "
+                 f"Серия: {streak} дней. Сегодня примирил людей: {scenario}. "
+                 f"Опиши (2-3 предложения) конкретные действия: какие слова сказал, "
+                 f"что передал в знак мира (орехи, кусок мяса, место у костра), "
+                 f"какой жест сделал. Стиль: земной, человеческий, без мистики.")
+    
+    token = await gigachat.get_token()
+    if not token:
+        # Fallback если API не доступен
+        return "Слово сдержано. Порядок восстановлен."
+    
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{GIGACHAT_API_URL}/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "Authorization": f"Bearer {token}"
+                },
+                json={
+                    "model": "GigaChat-Max",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.8  # Чуть креативности
+                },
+                ssl=ssl_context
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        logger.error(f"Keeper text error: {e}")
+    
+    return "Договоренность удержана. Племя спокойно."
+
 # ============== РАБОТА С ДАННЫМИ ==============
 def load_data():
     file_path = DATA_DIR / "stoyanka_data.json"
@@ -287,8 +353,12 @@ def load_data():
             "current_week_tools": [],
             "week_start": datetime.now(TIMEZONE).strftime("%Y-%m-%d")
         },
-        "amber_achieved": False
-    }
+        "amber_achieved": False,              # ← СЮДА ДОБАВЬ ЗАПЯТУЮ
+        "keeper_streak": 0,                   # ← НОВАЯ СТРОКА
+        "waiting_for_keeper": False,          # ← НОВАЯ СТРОКА
+        "keeper_promotion_shown": False,      # ← НОВАЯ СТРОКА
+        "total_keeper_success": 0             # ← НОВАЯ СТРОКА (запятой не нужно)
+    }                                         # ← эта скобка остается
     try:
         if file_path.exists():
             with open(file_path, "r", encoding="utf-8") as f:
@@ -382,7 +452,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/tried или 'попробовал' — Работаю над формой (+4ч)\n"
         "/penalty — Неудача в мастерской (-1ч)\n"
         "/status — Проверить запасы\n\n"
-        "Цель: создать 52 орудия до 11 апреля и получить Янтарь с Балтики.\n"
+        "Цель: создать 76 орудия до 11 апреля и получить Янтарь с Балтики.\n"
         "Утром спрошу про твои дела."
     )
 
@@ -474,15 +544,15 @@ async def cmd_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "ritual": is_ritual
     })
     
-    # Проверка на Янтарь (52 орудия)
-    if next_num == 52 and not data.get("amber_achieved"):
+    # Проверка на Янтарь (76 орудия)
+    if next_num == 76 and not data.get("amber_achieved"):
         data["amber_achieved"] = True
         amber_img = await gigachat.generate_image(get_amber_prompt())
         if amber_img:
             await context.bot.send_photo(
                 chat_id=data["user_id"], 
                 photo=BytesIO(amber_img),
-                caption="🎉 Великое достижение! Ты создал 52 орудия. "
+                caption="🎉 Великое достижение! Ты создал 76 орудия. "
                         "Племя обменяло их на Янтарь с Балтики. "
                         "Твой статус — Легендарный Мастер."
             )
@@ -507,7 +577,7 @@ async def cmd_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("(Изображение временно недоступно)")
     
     # Информация о прогрессе
-    await update.message.reply_text(f"📊 Всего создано: {next_num}/52")
+    await update.message.reply_text(f"📊 Всего создано: {next_num}/76")
 
 async def cmd_tried(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not (BOT_START <= now_msk() < BOT_END):
@@ -571,15 +641,24 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         emoji = "😡"
     
     msg = (f"📊 СТАТУС ДЕЛАТЕЛЯ {emoji}\n\n"
-           f"⚒️ Орудий создано: {total}/52\n"
+           f"⚒️ Орудий создано: {total}/76\n"
            f"⏱️ Без дела: {hours:.1f} ч.\n"
            f"{status}\n\n")
     
-    if total >= 52:
+    if total >= 76:
         msg += "🟡 Янтарь с Балтики получен!"
     else:
-        msg += f"🎯 Осталось до Янтаря: {52 - total}"
+        msg += f"🎯 Осталось до Янтаря: {76 - total}"
     
+    # Блок второй оси: Хранитель/Старший
+    now = now_msk()
+    if now.month > 3 or (now.month == 3 and now.day >= 15):
+        current_role = "Старший стоянки"
+    else:
+        current_role = "Хранитель соглашений"
+    
+    streak = data.get("keeper_streak", 0)
+    msg += f"\n\n⚖️ {current_role}\n🔥 Серия: {streak} дней"
     await update.message.reply_text(msg)
 
 # ============== ТАЙМЕРЫ ==============
@@ -595,12 +674,24 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
     now = now_msk()
     current_hour, current_minute = now.hour, now.minute
     current_weekday = now.weekday()  # 0=Monday
-    
+
+    # Повышение 15 марта (одноразовое сообщение)
+    if now.month == 3 and now.day == 15 and not data.get("keeper_promotion_shown"):
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="📜 Приказ Совета племени: ты повышен до Старшего стоянки — "
+                 "координация ресурсов и людей без сакральной власти. "
+                 "Серия сохранена. Продолжай удерживать порядок."
+        )
+        data["keeper_promotion_shown"] = True
+        save_data(data)
+        
     # Сброс дня
     if data.get("current_date") != today_str():
         data["current_date"] = today_str()
         data["morning_done"] = False
         data["waiting_for_plans"] = False
+        data["waiting_for_keeper"] = False  # ← СЮДА
         data["hunger_notified"] = False
         data["last_dopamine_hour"] = None
         data["goodnight_sent"] = False
@@ -616,6 +707,22 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
             data["waiting_for_plans"] = True
             save_data(data)
     
+    # ВЕЧЕРНИЙ ЧЕК ХРАНИТЕЛЯ (21:00) - ВСТАВЛЯЙ СЮДА
+    if current_hour == 21 and current_minute == 0:
+        if not data.get("waiting_for_keeper"):
+            # Определяем роль по дате
+            if now.month > 3 or (now.month == 3 and now.day >= 15):
+                role_name = "Старший стоянки"
+            else:
+                role_name = "Хранитель соглашений"
+            
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"⚖️ {role_name}: Соглашение Жулан выполнено? (да/нет)"
+            )
+            data["waiting_for_keeper"] = True
+            save_data(data)
+   
     # Проверка голода (бунт каждые 30 мин при >24ч)
     mode = get_hunger_mode(data)
     
@@ -702,7 +809,42 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower().strip()
     data = load_data()
-    
+
+    # Обработка вечернего чека Хранителя (до утреннего диалога!)
+    if data.get("waiting_for_keeper"):
+        text_clean = text.lower().strip()
+        
+        if text_clean in ["да", "yes", "конечно", "выполнено"]:
+            # Обновляем серию
+            data["keeper_streak"] = data.get("keeper_streak", 0) + 1
+            data["total_keeper_success"] = data.get("total_keeper_success", 0) + 1
+            data["waiting_for_keeper"] = False
+            save_data(data)
+            
+            # Генерируем текст через AI
+            now = now_msk()
+            is_elder = (now.month > 3 or (now.month == 3 and now.day >= 15))
+            success_text = await generate_keeper_success_text(data["keeper_streak"], is_elder)
+            
+            await update.message.reply_text(f"✅ Зафиксировано.\n\n{success_text}\n🔥 Серия: {data['keeper_streak']} дней")
+            return
+            
+        elif text_clean in ["нет", "no", "не", "не выполнено"]:
+            old_streak = data.get("keeper_streak", 0)
+            data["keeper_streak"] = 0
+            data["waiting_for_keeper"] = False
+            save_data(data)
+            
+            await update.message.reply_text(
+                f"❌ Соглашение не выдержано.\n"
+                f"Серия сброшена (было: {old_streak}).\n"
+                f"Социальное напряжение в племени растет."
+            )
+            return
+            
+        else:
+            await update.message.reply_text("Ответь просто: 'да' или 'нет'")
+            return
     # Если ждём планы
     if data.get("waiting_for_plans"):
         await handle_plans_response(update, context, text, data)
@@ -737,7 +879,7 @@ def main():
     # Таймер каждую минуту
     app.job_queue.run_repeating(main_timer, interval=60, first=10)
     
-    logger.info("Делатель орудий v5.0 запущен")
+    logger.info("Делатель орудий v5.1 запущен")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
