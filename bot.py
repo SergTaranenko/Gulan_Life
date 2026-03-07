@@ -887,7 +887,7 @@ def main():
     # Таймер каждую минуту
     app.job_queue.run_repeating(main_timer, interval=60, first=10)
     
-    logger.info("Делатель орудий v5.2 запущен")
+    logger.info("Делатель орудий v5.21 запущен")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
