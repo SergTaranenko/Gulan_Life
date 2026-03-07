@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Бот «Делатель орудий» (Мезолит) v5.1
+Бот «Делатель орудий» (Мезолит) v5.2
 - Зимне-весенние промпты (февраль-апрель)
 - Ритуальное изделие каждое 10-е (+18ч)
 - Янтарь с Балтики при 76 орудиях
@@ -20,7 +20,8 @@ from io import BytesIO
 
 import pytz
 import aiohttp
-from telegram import Update, InputMediaPhoto
+from telegram import Update, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import CallbackQueryHandler
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, 
     filters, ContextTypes, ConversationHandler
@@ -659,7 +660,32 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     streak = data.get("keeper_streak", 0)
     msg += f"\n\n⚖️ {current_role}\n🔥 Серия: {streak} дней"
-    await update.message.reply_text(msg)
+    
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("⚒️ Сделал", callback_data="done"),
+            InlineKeyboardButton("🔄 Пробовал", callback_data="tried"),
+        ],
+        [
+            InlineKeyboardButton("💔 Штраф", callback_data="penalty"),
+            InlineKeyboardButton("📊 Статус", callback_data="status"),
+        ]
+    ])
+    await update.message.reply_text(msg, reply_markup=keyboard)
+
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    fake_update = update
+    if query.data == "done":
+        await cmd_done(fake_update, context)
+    elif query.data == "tried":
+        await cmd_tried(fake_update, context)
+    elif query.data == "penalty":
+        await cmd_penalty(fake_update, context)
+    elif query.data == "status":
+        await cmd_status(fake_update, context)
 
 # ============== ТАЙМЕРЫ ==============
 async def main_timer(context: ContextTypes.DEFAULT_TYPE):
@@ -700,6 +726,10 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
     # Утренний диалог (5:30)
     if current_hour == WAKEUP_HOUR and current_minute == WAKEUP_MINUTE:
         if not data.get("morning_done"):
+            # Принудительно закрываем вечерний флаг если остался
+            if data.get("waiting_for_keeper"):
+                data["waiting_for_keeper"] = False
+                save_data(data)
             await context.bot.send_message(
                 chat_id=user_id,
                 text="⚒️ Вставай, Делатель. У тебя есть 4 дела на сегодня? (есть/нет)"
@@ -809,6 +839,9 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower().strip()
     data = load_data()
+    if not data.get("user_id"):
+        data["user_id"] = update.effective_user.id
+        save_data(data)
 
     # Обработка вечернего чека Хранителя (до утреннего диалога!)
     if data.get("waiting_for_keeper"):
@@ -829,7 +862,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ Зафиксировано.\n\n{success_text}\n🔥 Серия: {data['keeper_streak']} дней")
             return
             
-        elif text_clean in ["нет", "no", "не", "не выполнено"]:
+        elif text_clean in ["нет", "no", "не выполнено"]:
             old_streak = data.get("keeper_streak", 0)
             data["keeper_streak"] = 0
             data["waiting_for_keeper"] = False
@@ -874,6 +907,7 @@ def main():
     app.add_handler(CommandHandler("tried", cmd_tried))
     app.add_handler(CommandHandler("penalty", cmd_penalty))
     app.add_handler(CommandHandler("status", cmd_status))
+    app.add_handler(CallbackQueryHandler(handle_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
     # Таймер каждую минуту
