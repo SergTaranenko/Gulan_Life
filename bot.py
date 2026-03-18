@@ -357,7 +357,8 @@ def load_data():
         "keeper_streak": 0,                   # ← НОВАЯ СТРОКА
         "waiting_for_keeper": False,          # ← НОВАЯ СТРОКА
         "keeper_promotion_shown": False,      # ← НОВАЯ СТРОКА
-        "total_keeper_success": 0             # ← НОВАЯ СТРОКА (запятой не нужно)
+        "total_keeper_success": 0,            # ← НОВАЯ СТРОКА
+        "superhero_morning_flag": False       # ← НОВАЯ СТРОКА (запятой не нужно)
     }                                         # ← эта скобка остается
     try:
         if file_path.exists():
@@ -463,6 +464,7 @@ async def handle_plans_response(update: Update, context: ContextTypes.DEFAULT_TY
     if any(word in text_lower for word in ["есть", "да", "готов", "yes"]):
         data["plans_confirmed"] = True
         data["morning_done"] = True
+        data["superhero_morning_flag"] = True
         data["waiting_for_plans"] = False
         save_data(data)
         
@@ -728,6 +730,64 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
             data["waiting_for_keeper"] = True
             save_data(data)
    
+    # ============== НАПОМИНАЛКИ РОЛЕЙ ==============
+
+    # 04:00 Пн–Пт — Супергерой
+    if current_hour == 4 and current_minute == 0 and current_weekday < 5:
+        data["superhero_morning_flag"] = False
+        save_data(data)
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="🌑 Рассвет у костра. Племя ещё спит, а ты можешь взять кремнёвое орудие мысли. Сегодня не нужен подвиг. Достаточно 15 минут у огня знаний. Открой свиток диссертации. Исправь 1 абзац. Выпиши 1 мысль. Супергерой просыпается с малого удара."
+        )
+
+    # 09:00 Пн–Пт — Дневная смена
+    if current_hour == 9 and current_minute == 0 and current_weekday < 5:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚒️ Дневная смена племени. Сейчас главное — ремесло, добыча, порядок в лагере. Делай рабочие дела крепко и спокойно. Если будет окно — можно на пару минут открыть мешок Мультимиллионера: цифры, идея, деньги, стратегия."
+        )
+
+    # 18:00 Пн–Пт — Добрый Папа
+    if current_hour == 18 and current_minute == 0 and current_weekday < 5:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="🏕️ Костёр семьи уже горит. Пора возвращаться в лагерь не только телом, но и сердцем. Сегодня роль — Добрый Папа: тепло, внимание, дом, разговор, забота. Не нужен идеал. Нужно одно живое доброе действие."
+        )
+
+    # 21:30 Пн–Пт — Мультимиллионер или добивка Супергероя (21:00 занят чеком Хранителя)
+    if current_hour == 21 and current_minute == 30 and current_weekday < 5:
+        if data.get("superhero_morning_flag"):
+            msg = ("🔥 Ночная мастерская открыта. Если есть искра — выходит Мультимиллионер. "
+                   "Один денежный шаг: идея, таблица, план, контроль, стратегия. "
+                   "Не строй империю за ночь. Положи один слиток в будущее.")
+        else:
+            msg = ("🦶 След охотника не найден. Утренний выход Супергероя пропущен. "
+                   "Значит, этой ночью сначала не золото, а знание. "
+                   "Открой диссертацию хотя бы на 15 минут. Сначала копьё героя, потом сундук Мультимиллионера.")
+        await context.bot.send_message(chat_id=user_id, text=msg)
+
+    # 08:00 Суббота — Супергерой
+    if current_hour == 8 and current_minute == 0 and current_weekday == 5:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="📜 День большой охоты. Сегодня племя ждёт от тебя не суеты, а глубокого прохода в пещеры знания. Суббота — день Супергероя. Не обязательно тащить весь мамонт целиком. Но нужно сделать настоящий заход: текст, таблица, правка, источники. Сегодня ты добываешь не мясо, а будущее имя."
+        )
+
+    # 09:00 Воскресенье — Мультимиллионер
+    if current_hour == 9 and current_minute == 0 and current_weekday == 6:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="💰 Утро Мультимиллионера. Один денежный шаг сегодня важнее десяти фантазий."
+        )
+
+    # 15:00 Воскресенье — Добрый Папа
+    if current_hour == 15 and current_minute == 0 and current_weekday == 6:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="🌿 Воскресный очаг зовёт. После обеда главное — семья, тепло и присутствие."
+        )
+    
     # Проверка голода (бунт каждые 30 мин при >24ч)
     mode = get_hunger_mode(data)
     
