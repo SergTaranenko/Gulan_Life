@@ -747,7 +747,7 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
             commandments = load_commandments()
             if commandments:
                 short_list = "\n".join([f"{c['id']}. {c['short']}" for c in commandments])
-                morning_text = f"📜 ЗАПОВЕДИ ДНЯ:\n\n{short_list}\n\n⚒️ Вставай, Делатель. У тебя есть 4 дела на сегодня? (есть/нет)"
+                morning_text = f"📜 ЗАПОВЕДИ ДНЯ:\n\n{short_list}\n\n🌅 Рассвет над Дубной. Ты начертил 4 дела на бересте? (есть/нет)"
             else:
                 morning_text = "⚒️ Вставай, Делатель. У тебя есть 4 дела на сегодня? (есть/нет)"
             
@@ -766,7 +766,7 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
             
             await context.bot.send_message(
                 chat_id=user_id,
-                text=f"⚖️ {role_name}: Соглашение Жулан выполнено? (да/нет)"
+                text=f"🌙 Вечер у костра. {role_name} спрашивает: ты сдержал сегодня соглашение? (сдержал/сорвал)"
             )
             data["waiting_for_keeper"] = True
             save_data(data)
@@ -931,7 +931,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.get("waiting_for_keeper"):
         text_clean = text.lower().strip()
         
-        if text_clean in ["да", "yes", "конечно", "выполнено"]:
+        if text_clean in ["сдержал", "yes", "конечно", "выполнено"]:
             # Обновляем серию
             data["keeper_streak"] = data.get("keeper_streak", 0) + 1
             data["total_keeper_success"] = data.get("total_keeper_success", 0) + 1
@@ -946,7 +946,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"✅ Зафиксировано.\n\n{success_text}\n🔥 Серия: {data['keeper_streak']} дней")
             return
             
-        elif text_clean in ["нет", "no", "не выполнено"]:
+        elif text_clean in ["сорвал", "no", "не выполнено"]:
             old_streak = data.get("keeper_streak", 0)
             data["keeper_streak"] = 0
             data["waiting_for_keeper"] = False
@@ -960,7 +960,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
             
         else:
-            await update.message.reply_text("Ответь просто: 'да' или 'нет'")
+            await update.message.reply_text("Ответь: 'сдержал' или 'сорвал'")
             return
     # Если ждём планы
     if data.get("waiting_for_plans"):
