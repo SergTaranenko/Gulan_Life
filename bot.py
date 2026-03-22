@@ -373,6 +373,17 @@ def load_data():
         logger.error(f"Load error: {e}")
         return default
 
+def load_commandments():
+    """Загружает заповеди из JSON"""
+    file_path = DATA_DIR / "commandments.json"
+    try:
+        if file_path.exists():
+            with open(file_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        logger.error(f"Commandments load error: {e}")
+    return []
+
 def save_data(data):
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     file_path = DATA_DIR / "stoyanka_data.json"
@@ -724,17 +735,23 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
         data["goodnight_sent"] = False
         save_data(data)
     
-    # Утренний диалог (5:30)
+        # Утренний диалог (5:30)
     if current_hour == WAKEUP_HOUR and current_minute == WAKEUP_MINUTE:
         if not data.get("morning_done"):
             # Принудительно закрываем вечерний флаг если остался с ночи
             if data.get("waiting_for_keeper"):
                 data["waiting_for_keeper"] = False
                 save_data(data)
-            await context.bot.send_message(
-                chat_id=user_id,
-                text="⚒️ Вставай, Делатель. У тебя есть 4 дела на сегодня? (есть/нет)"
-            )
+            
+            # Загружаем и показываем 12 кратких заповедей
+            commandments = load_commandments()
+            if commandments:
+                short_list = "\n".join([f"{c['id']}. {c['short']}" for c in commandments])
+                morning_text = f"📜 ЗАПОВЕДИ ДНЯ:\n\n{short_list}\n\n⚒️ Вставай, Делатель. У тебя есть 4 дела на сегодня? (есть/нет)"
+            else:
+                morning_text = "⚒️ Вставай, Делатель. У тебя есть 4 дела на сегодня? (есть/нет)"
+            
+            await context.bot.send_message(chat_id=user_id, text=morning_text)
             data["waiting_for_plans"] = True
             save_data(data)
     
@@ -838,6 +855,14 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
             save_data(data)
             reward_text = get_dopamine_reward()
             await context.bot.send_message(chat_id=user_id, text=reward_text)
+            # Отправляем случайную полную заповедь
+            commandments = load_commandments()
+            if commandments:
+                cmd = random.choice(commandments)
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=f"📜 {cmd['id']}. {cmd['short']} — {cmd['full']}"
+                )
     
     # Вечер (23:00) — только если режим good
     if current_hour == 23 and current_minute == 0 and not data.get("goodnight_sent"):
