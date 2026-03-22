@@ -374,8 +374,8 @@ def load_data():
         return default
 
 def load_commandments():
-    """Загружает заповеди из JSON"""
-    file_path = DATA_DIR.parent / "commandments.json"  # или Path(__file__).parent / "commandments.json"
+    """Загружает заповеди из JSON (файл рядом с ботом)"""
+    file_path = Path(__file__).parent / "commandments.json"
     try:
         if file_path.exists():
             with open(file_path, "r", encoding="utf-8") as f:
@@ -586,7 +586,7 @@ async def cmd_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
     
     if img_data:
-        await context.bot.send_photo(chat_id=data["user_id"], photo=BytesIO(img_data))
+        await context.bot.send_photo(chat_id=update.effective_user.id, photo=BytesIO(img_data))
     else:
         await update.message.reply_text("(Изображение временно недоступно)")
     
@@ -733,6 +733,7 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
         data["hunger_notified"] = False
         data["last_dopamine_hour"] = None
         data["goodnight_sent"] = False
+        data["superhero_morning_flag"] = False  # ← ДОБАВИТЬ
         save_data(data)
     
         # Утренний диалог (5:30)
