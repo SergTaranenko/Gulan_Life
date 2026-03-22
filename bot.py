@@ -375,7 +375,7 @@ def load_data():
 
 def load_commandments():
     """Загружает заповеди из JSON"""
-    file_path = DATA_DIR / "commandments.json"
+    file_path = DATA_DIR.parent / "commandments.json"  # или Path(__file__).parent / "commandments.json"
     try:
         if file_path.exists():
             with open(file_path, "r", encoding="utf-8") as f:
