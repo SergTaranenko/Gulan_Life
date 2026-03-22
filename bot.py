@@ -452,6 +452,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/done или 'сделал' — Орудие готово (+12ч, +18ч каждое 10-е)\n"
         "/tried или 'попробовал' — Работаю над формой (+4ч)\n"
         "/penalty — Неудача в мастерской (-1ч)\n"
+        "/penalty20 — Катастрофа в мастерской (-20ч)\n"
         "/status — Проверить запасы\n\n"
         "Цель: создать 76 орудия до 11 апреля и получить Янтарь с Балтики.\n"
         "Утром спрошу про твои дела."
@@ -624,6 +625,29 @@ async def cmd_penalty(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🌬️ Ветер сдул берёзовый дёготь из ёмкости. -1ч"
     ]
     await update.message.reply_text(random.choice(penalties))
+
+async def cmd_penalty20(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Жесткий штраф -20 часов (катастрофа)"""
+    if not (BOT_START <= now_msk() < BOT_END):
+        await update.message.reply_text("Бот неактивен.")
+        return
+    
+    data = load_data()
+    current_hunger = get_hunger_hours(data)
+    new_hunger = current_hunger + 20  # +20 часов голода = -20 часов сытости
+    new_feed_time = now_msk() - timedelta(hours=new_hunger)
+    
+    data["last_feed_time"] = new_feed_time.isoformat()
+    save_data(data)
+    
+    hard_penalties = [
+        "💥 Катастрофа! Пожар в мастерской сжег все заготовки и инструменты! -20ч",
+        "🌊 Наводнение! Река вышла из берегов и смыло половину стоянки! -20ч",
+        "❄️ Ледниковый ветер! Три дня не выходишь из шалаша, все работы остановлены! -20ч",
+        "🐻 Медведь-шату! Разорвал шалаш и разбросал все орудия по лесу! -20ч",
+        "⚡ Гроза ударила в костер! Все припасы и инструменты уничтожены! -20ч"
+    ]
+    await update.message.reply_text(random.choice(hard_penalties))    
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
@@ -808,7 +832,7 @@ async def main_timer(context: ContextTypes.DEFAULT_TYPE):
         )
     
     # Дофамин в :55
-    if current_minute == 55 and DOPAMINE_START_HOUR <= current_hour <= DOPAMINE_END_HOUR:
+    if current_minute == 55 and DOPAMINE_START_HOUR <= current_hour <= DOPAMINE_END_HOUR and current_hour % 2 != 0:
         if data.get("last_dopamine_hour") != current_hour:
             data["last_dopamine_hour"] = current_hour
             save_data(data)
@@ -941,6 +965,7 @@ def main():
     app.add_handler(CommandHandler("done", cmd_done))
     app.add_handler(CommandHandler("tried", cmd_tried))
     app.add_handler(CommandHandler("penalty", cmd_penalty))
+    app.add_handler(CommandHandler("penalty20", cmd_penalty20))
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     
